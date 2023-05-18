@@ -1,0 +1,723 @@
+---
+title: "Marketing Analysis Project"
+output:
+  html_document:
+    df_print: paged
+---
+### Load Packages
+
+```{r}
+library(ggplot2)
+library(GGally)
+library(Metrics)
+library(plyr)
+library(dplyr)
+library(reshape2)
+library(corrplot)
+library(plotly)
+library(caTools)
+library(stargazer)
+library(class)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(e1071)
+library(caret)
+#library(DescTools)
+
+```
+### Data
+
+```{r}
+rm(list=ls())       # Remove anything that might currently be in memory so we can start fresh.
+library(MASS)       # Load the MASS package
+BostonHousing <- read.csv("Boston.csv")
+colnames(BostonHousing) <- c("CrimePerCapita","Residential","NonRetail","CharlesRiver","N_Oxides",
+                  "RoomsPerDwelling","Pre40HouseAge","BusinessCenterProximity",
+                 "HighwayProximity","Tax","PupilPerTeacher","BlackIndex",
+                 "LowStatus","HomeValue" )
+print(head(BostonHousing))
+```
+
+### Data Description
+This data is taken from the Boston Standard Metropolitan Statistical Area (SMSA) in 1970. It was uploaded to Kaggle.com by Patrick Parsa.
+
+
+```{r}
+str(BostonHousing)
+```
+
+```{r}
+stargazer(BostonHousing, type = 'text', title='BostonHousing: Summary Statistics')
+```
+There are 506 rows and 14 columns. Each row represents a different town or suburb observed at the time by the SMSA. Each column represents different locality characteristics within each town deemed noteworthy by the SMSA. These columns would represent the variables of the dataset. All the column have numeric values with a few columns containing pure integers as a representation of categorical variables. We are going to build a model to predict the median home value within these localities.
+
+#### Target Variable
+
+**HomeValue** is our target variable. HomeValue describes the median value of the homes in each town or suburb observed within this dataset. Every other variable is considered an independent variable that will help in predicting the HomeValue in our model. All values in HomeValue are recorded in units of $1000.
+
+#### Independent Variables
+With HomeValue as our target variable, we are left with 13 independent variables:
+
+**CrimePerCapita**            : The crime per capita by town <br />
+**Residential**               : The proportion of residential land zoned for lots over 25,000 square feet. <br />
+**NonRetail**                 : The proportion of non-retail business acres per town. <br />
+**CharlesRiver**              : This is a dummy variable to record whether an area of land is bounded by the Charles River. 1 for yes, 0 for no. <br />
+**N_Oxides**                  : The nitric oxide concentration recorded in parts per 10 million. <br />
+**RoomsPerDwelling**          : The average rooms per home for the town. <br />
+**Pre40HouseAge**             : The proportion of owner-occupied units built prior to 1940. <br />
+**BusinessCenterProximity**   : The weighted distances to five Boston employment centers. <br />
+**HighwayProximity**          : Index of accessibility to highways leading to or from an urban center. <br />
+**Tax**                       : The full-value property tax rate per $10,000. <br />
+**PupilPerTeacher**           : The student-teacher ratio by town. <br />
+**BlackIndex**                : The proportion of black people by town. <br />
+**LowStatus**                 : The percentage of lower status of the population. <br />
+
+### Exploratory Data Analysis
+
+#### Distribution of HomeValue
+```{r, fig.width=4, fig.height=4}
+# Visualizing our dependent variable y(HomeValue)
+
+ggplot(BostonHousing, aes(x = HomeValue)) + geom_histogram(color ="black",fill="black")
+
+```
+
+The graph of HomeValue is slightly right skewed.
+
+#### Distribution of CrimePerCapita
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = CrimePerCapita)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ CrimePerCapita
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = CrimePerCapita, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of CrimePerCapita is heavily right-skewed. When plotting HomeValue with respect to CrimePerCapita, we can see a negative correlation. As CrimePerCapita increases, the HomeValue tends to decrease.
+
+#### Distribution of Residential
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = Residential)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ Residential
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = Residential, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of Residential is right-skewed. When plotting HomeValue with respect to Residential, we observe a generally positive correlation, such that as the Residential proportion increases, the HomeValue increases as well.
+
+#### Distribution of NonRetail
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = NonRetail)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ NonRetail
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = NonRetail, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of NonRetail is slightly left-skewed. When plotting HomeValue with respect to NonRetail, we observe a negative correlation such that as NonRetail proportion increases, HomeValue decreases.
+
+#### Distribution of CharlesRiver
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = CharlesRiver)) + geom_bar(color ="black",fill="black")
+```
+
+#### HomeValue ~ CharlesRiver
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = CharlesRiver, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of CharlesRiver is heavily right-skewed with the majority of data points having a value of '0'.
+
+#### Distribution of N_Oxides
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = N_Oxides)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ N_Oxides
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = N_Oxides, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of N_OXides is right-skewed. When plotting HomeValue with respect to N_Oxides, we can observe a negative correlation such that as N_OXides increases, HomeValue decreases. This relationship is semi-intuitive since most individuals would prefer not to live in an area that is more heavily polluted. 
+
+#### Distribution of RoomsPerDwelling
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = RoomsPerDwelling)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ RoomsPerDwelling
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = RoomsPerDwelling, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of RoomsPerDwelling appears relatively normal. Looking at this distribution, the average number of rooms within these localities range between 5 to 7. When plotting HomeValue with respect to RoomsPerDwelling, we observe a positive correlation such that as RoomsPerDwelling increases, HomeValue increases as well. Most people would prefer houses with more rooms, however those typically would cost more.
+
+#### Distribution of Pre40HouseAge
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = Pre40HouseAge)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ Pre40HouseAge
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = Pre40HouseAge, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of Pre40HouseAge is left-skewed. Intuitively, older houses cost less than newer houses. Thus we can observe a slight negative correlation when plotting HomeValue with respect to Pre40HouseAge. 
+
+#### Distribution of BusinessCenterProximity
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = BusinessCenterProximity)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ BusinessCenterProximity
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = BusinessCenterProximity, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of BusinessCenterProximity is right-skewed.Typically, the closer you are to a business center, the smaller the size of your house would be. This may be a reason why HomeValue is lower, the closer you are to a BusinessCenter. In contrast, the further away you are, the more land you are able to buy, thus the HomeValue would be greater to a certain extent. 
+
+#### Distribution of HighwayProximity
+```{r,fig.width=4, fig.height=4}
+# potentially remove.
+ggplot(BostonHousing, aes(x = HighwayProximity)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ HighwayProximity
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = HighwayProximity, y = HomeValue)) +
+  geom_point()
+```
+
+
+
+#### Distribution of Tax
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = Tax)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ Tax
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = Tax, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of Tax is left-skewed. When plotting HomeValue with respect to Tax, we observe a slight negative correlation, such that as Property Tax rate goes up, HomeValue decreases.
+
+#### Distribution of PupilPerTeacher
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = PupilPerTeacher)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ PupilPerTeacher
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = PupilPerTeacher, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of PupilPerTeacher is left-skewed. When plotting HomeValue with respect to PupilPerTeacher, we observe a negative correlation such that as PupilPerTeacher increases, HomeValue decreases. House prices typically are very driven by the quality of schools within the area. Good schools usually have low pupil-teacher ratio, thus this negative correlation makes sense.
+
+#### Distribution of BlackIndex
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = BlackIndex)) + geom_histogram(color ="black",fill="black")
+```
+
+#### Home Value ~ BlackIndex
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = BlackIndex, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of BlackIndex is left-skewed. When plotting HomeValue with respect to BlackIndex, we observe a positive correlation, such that as BlackIndex increases, HomeValue increases as well.
+
+#### Distribution of LowStatus
+```{r,fig.width=4, fig.height=4}
+ggplot(BostonHousing, aes(x = LowStatus)) + geom_histogram(color ="black",fill="black")
+```
+
+#### HomeValue ~ LowStatus
+```{r,fig.width=4, fig.height=4}
+ggplot (BostonHousing, aes (x = LowStatus, y = HomeValue)) +
+  geom_point()
+```
+
+The distribution of LowStatus is slightly right-skewed. When plotting HomeValue with respect to LowStatus, we observe a negative correlation, such that as LowStatus percentage increases, HomeValue decreases.
+
+#### Correlations between independent variables
+
+```{r}
+cor_vars<-BostonHousing[,c("CrimePerCapita","Residential","NonRetail","CharlesRiver","N_Oxides",
+                  "RoomsPerDwelling","Pre40HouseAge","BusinessCenterProximity",
+                 "HighwayProximity","Tax","PupilPerTeacher","BlackIndex",
+                 "LowStatus","HomeValue" )]
+cor(cor_vars)
+trans<-cor(cor_vars)
+melted_cormat <- melt(trans)
+```
+
+Visualize the correlation between all variables on a heat map
+```{r}
+corrplot(cor(dplyr::select(BostonHousing, -CharlesRiver,-BlackIndex)))
+```
+
+HomeValue decreases with increase in CrimePerCapita (Medium),NonRetail(High), N_Oxides(Low), Pre40HouseAge(Low), HighwayProximity(Low), Tax(Low), PupilPerTeacher(High), and LowStatus(High).
+HomeValue increases with increase in Residential(Low) and RoomsPerDwelling(High)
+
+Visualize the effect of variables on HomeValue
+```{r}
+BostonHousing %>%
+  dplyr::select(c(CrimePerCapita, RoomsPerDwelling, Pre40HouseAge, HighwayProximity, Tax, LowStatus, HomeValue, NonRetail, N_Oxides, PupilPerTeacher, Residential)) %>%
+  melt(id.vars = 'HomeValue') %>%
+  ggplot(aes(x = value, y = HomeValue, color = variable)) +
+  geom_point(alpha = 0.7) +
+  stat_smooth(aes(color = 'black')) +
+  facet_wrap(~variable, scales = 'free', ncol = 2) + 
+  labs(x = 'Variable Value', y = 'Median House Price ($1000s)') +
+  theme_minimal()
+```
+
+The plots from the graph shows same correlation with the heat map.
+
+### Scaling the data
+
+```{r}
+mean(BostonHousing$HomeValue)
+sd(BostonHousing$HomeValue)
+```
+Our mean should be close to zero and standard deviation close to 1. We will need to scale the data.
+
+
+```{r}
+
+BostonHousing <- scale(BostonHousing,center = TRUE, scale = TRUE)
+
+```
+
+
+```{r}
+
+colMeans(BostonHousing)  # faster version of apply(scaled.dat, 2, mean)
+apply(BostonHousing, 2, sd)
+
+```
+
+
+```{r}
+
+BostonHousing <- as.data.frame(BostonHousing)
+mean(BostonHousing$HomeValue)
+sd(BostonHousing$HomeValue)
+
+```
+
+### Splitting the data into training and testing set.
+```{r}
+#make this example reproducible
+set.seed(1)
+
+#use 70% of dataset as training set and 30% as test set
+BH<- sample(c(TRUE, FALSE), nrow(BostonHousing), replace=TRUE, prob=c(0.7,0.3))
+TrainSet  <- BostonHousing[BH, ]
+TestSet   <- BostonHousing[!BH, ]
+dim(TrainSet)
+dim(TestSet)
+```
+
+### Model 1: Multiple Linear Regression with all variables.
+```{r}
+ModelLR1<-lm(HomeValue ~ CrimePerCapita + Residential + NonRetail + CharlesRiver + N_Oxides + RoomsPerDwelling + 
+              Pre40HouseAge + BusinessCenterProximity + HighwayProximity + Tax + PupilPerTeacher + BlackIndex + LowStatus
+              , data = TrainSet)
+summary(ModelLR1)
+```
+
+Predicting the performance of out model on testing data set
+```{r}
+predictedHomeValueLR1 <- predict(ModelLR1, TestSet)
+TestSet['Predicted.HomeValueLR1'] <- predictedHomeValueLR1
+
+pl1 <- TestSet %>%
+  ggplot(aes(HomeValue, Predicted.HomeValueLR1)) +
+  geom_point(alpha = 0.5) +
+  stat_smooth(aes(color = 'black')) +
+  xlab('Actual Home Value') +
+  ylab('Predicted Home Value')+
+  theme_bw()
+
+ggplotly(pl1)
+```
+Assessing error rate: RMSE of our model
+
+```{r}
+# Finally, we'll check the prediction accuracy with the MSE, MAE, RMSE, and R-squared metrics.
+
+if(!require('MLmetrics')) {
+  install.packages('MLmetrics')
+  library('MLmetrics')
+}
+
+mse = MSE(TestSet$HomeValue, predictedHomeValueLR1)
+mae = MAE(TestSet$HomeValue, predictedHomeValueLR1)
+rmse = RMSE(TestSet$HomeValue, predictedHomeValueLR1)
+r2 = R2(TestSet$HomeValue, predictedHomeValueLR1, form = "traditional")
+
+ 
+cat(" MAE:", mae, "\n", "MSE:", mse, "\n", 
+     "RMSE:", rmse, "\n", "R-squared:", r2)
+
+```
+R-squared on TestSet for this model is 0.62, which shows the level of correlation between HomeValue and other variables. 
+
+RMSE score for our multiple regression model is 0.55, which is not that bad. Ideally, it should be between 0.2 to 0.5. 
+
+So, we will create a new model by eliminating the variables with P-values that are not statistically significant, i.e.,
+Residential, NonRetail, CharlesRiver, Pre40HouseAge, Tax, and BlackIndex.
+By looking at plot of effect of variables on HomeValue, we can further eliminate PupilPerTeacher, and N_Oxides.
+
+
+### Model2: Multiple Linear Regression using feature extraction variables: 
+CrimePerCapita, RoomsPerDwelling, BusinessCenterProximity, HighwayProximity, and LowStatus that have statistically significant p-values.
+```{r}
+ModelLR2<-lm(HomeValue ~ CrimePerCapita + RoomsPerDwelling + BusinessCenterProximity + HighwayProximity + LowStatus
+              , data = TrainSet)
+summary(ModelLR2)
+```
+
+Predicting the performance of out model on testing data set
+```{r}
+predictedHomeValue_LR2 <- predict(ModelLR2, TestSet)
+TestSet['Predicted.HomeValueLR2'] <- predictedHomeValue_LR2
+
+
+pl2 <- TestSet %>%
+  ggplot(aes(HomeValue, x=Predicted.HomeValueLR2)) +
+  geom_point(alpha = 0.5) +
+  stat_smooth(aes(color = 'black')) +
+  xlab('Actual Home Value') +
+  ylab('Predicted Home Value')+
+  theme_bw()
+
+ggplotly(pl2)
+```
+We can see there a few outliers at HomeValue = 50.
+
+Assessing error rate: RMSE of our model
+```{r}
+# Finally, we'll check the prediction accuracy with the MSE, MAE, RMSE, and R-squared metrics.
+
+mse = MSE(TestSet$HomeValue, predictedHomeValue_LR2)
+mae = MAE(TestSet$HomeValue, predictedHomeValue_LR2)
+rmse = RMSE(TestSet$HomeValue, predictedHomeValue_LR2)
+r2 = R2(TestSet$HomeValue, predictedHomeValue_LR2, form = "traditional")
+
+ 
+cat(" MAE:", mae, "\n", "MSE:", mse, "\n", 
+     "RMSE:", rmse, "\n", "R-squared:", r2)
+```
+
+The R-squared value for this model is 0.49 which which is worse than our previous model.
+
+RMSE value is 0.63 which is also more than the previous model1. Model 2 obviously does not work.
+
+### Model 3:
+So, to further improve the performance we can remove the outliers at HomeValue = 50, and eliminate features like BusinessCenterProximity and HighwayProximity. 
+We will also create an interaction term between LowStatus and RoomsPerDwelling and see if it improves our adjusted R-squared.
+
+```{r}
+df <- subset(BostonHousing, HomeValue != 50)
+
+df['LowStatusC'] <- df$LowStatus - mean(df$LowStatus)
+df['RoomsPerDwellingC'] <- df$RoomsPerDwelling - mean(df$RoomsPerDwelling)
+
+df['RMLStat'] <- df$RoomsPerDwellingC * df$LowStatusC 
+
+
+#Split Data into TrainSet and TestSet
+
+#make this example reproducible
+set.seed(1)
+
+#use 70% of dataset as training set and 30% as test set
+BH2<- sample(c(TRUE, FALSE), nrow(df), replace=TRUE, prob=c(0.7,0.3))
+TrainSet2  <- df[BH2, ]
+TestSet2   <- df[!BH2, ]
+dim(TrainSet2)
+dim(TestSet2)
+
+ModelLR3<-lm(HomeValue ~ CrimePerCapita + RoomsPerDwelling + LowStatus + RMLStat
+              , data = TrainSet2)
+summary(ModelLR3)
+```
+
+```{r}
+predictedHomeValue_LR3 <- predict(ModelLR3, TestSet2)
+TestSet2['Predicted.HomeValueLR3'] <- predictedHomeValue_LR3
+
+
+pl3 <- TestSet2 %>%
+  ggplot(aes(HomeValue, x=Predicted.HomeValueLR3)) +
+  geom_point(alpha = 0.5) +
+  stat_smooth(aes(color = 'black')) +
+  xlab('Actual Home Value') +
+  ylab('Predicted Home Value')+
+  theme_bw()
+
+ggplotly(pl3)
+```
+
+```{r}
+# Finally, we'll check the prediction accuracy with the MSE, MAE, RMSE, and R-squared metrics.
+
+mse = MSE(TestSet2$HomeValue, predictedHomeValue_LR3)
+mae = MAE(TestSet2$HomeValue, predictedHomeValue_LR3)
+rmse = RMSE(TestSet2$HomeValue, predictedHomeValue_LR3)
+r2 = R2(TestSet2$HomeValue, predictedHomeValue_LR3, form = "traditional")
+
+ 
+cat(" MAE:", mae, "\n", "MSE:", mse, "\n", 
+     "RMSE:", rmse, "\n", "R-squared:", r2)
+```
+
+The RMSE score for interaction model after removing the outliers has improved from 0.55 in Model 1 to 0.52 but our R2 has has gotten worse from .62 to 0.59, which is not good.Our Best Model so far is Model 1 with  RMSE: 0.558359 and  R-squared: 0.6252161. We will further analyse using different models to see if we can improve on this.
+
+Comparing models on their performance on the Train Set using Stargazer
+
+```{r}
+stargazer(ModelLR1, ModelLR2, ModelLR3, title = "Comparing three Linear Regression Models", align = TRUE, type = 'text')
+```
+We can see from the table, adjusted R-squared value is highest in the interaction model  However, our evaluation on Test Set says otherwise.
+
+### Model 4: Regression using SVM
+```{r}
+#Model SVM
+#Fit SVR model and visualize using scatter plot
+#Regression with SVM
+
+ModelSVM <- svm(HomeValue~., data=TrainSet)
+summary(ModelSVM)
+ 
+
+#Predict using SVM regression
+PreditedHomeValueSVM = predict(ModelSVM, TestSet)
+
+#Overlay SVM Predictions on Scatter Plot
+
+x = 1:length(TestSet$HomeValue)
+plot(x, TestSet$HomeValue, pch=18, col="red")
+lines(x, PreditedHomeValueSVM, lwd="1", col="blue")
+
+
+# Finally, we'll check the prediction accuracy with the MSE, MAE, RMSE, and R-squared metrics.
+
+mse = MSE(TestSet$HomeValue, PreditedHomeValueSVM)
+mae = MAE(TestSet$HomeValue, PreditedHomeValueSVM)
+rmse = RMSE(TestSet$HomeValue, PreditedHomeValueSVM)
+r2 = R2(TestSet$HomeValue, PreditedHomeValueSVM, form = "traditional")
+
+ 
+cat(" MAE:", mae, "\n", "MSE:", mse, "\n", 
+     "RMSE:", rmse, "\n", "R-squared:", r2)
+```
+Our second model for Regression is SVM. We fitted our training set on the SVM model and then checked the model performance on the test set.
+Our best performance so far has been  Model 1 with  RMSE: 0.558359 and  R-squared: 0.6252161. The performance from ModelSVM  is RMSE: 0.4259245  and R-squared: 0.70201661, which is much better.
+
+### Model 5: SVM using Parameter Tuning
+```{r}
+## Tuning SVR model by varying values of maximum allowable error and cost parameter
+
+#Tune the SVM model
+OptModelSVM=tune(svm, HomeValue~., data=TrainSet,ranges=list(epsilon=seq(0,1,0.1), cost=1:20))
+
+#Print optimum value of parameters
+print(OptModelSVM)
+
+#Plot the perfrormance of SVM Regression model
+plot(OptModelSVM)
+```
+
+The OptModelsvm has value of epsilon and cost at 0 and 8 respectively. The plot above visualizes the performance of each of the model. The legend on the right displays the value of Mean Square Error (MSE). MSE is defined as (RMSE)2 and is also a performance indicator.
+
+```{r}
+## Select the best model and compute RMSE and R2
+
+#Find out the best model
+BestModelSVM=OptModelSVM$best.model
+
+#Predict HomeValue using best model
+PreditedHomeValueSVMBest=predict(BestModelSVM,TestSet)
+
+#Calculate RMSE of the best model 
+rmseSVMBest = RMSE(TestSet$HomeValue, PreditedHomeValueSVMBest)
+
+r2SVMBest = R2(TestSet$HomeValue, PreditedHomeValueSVMBest, form = "traditional")
+
+cat( "RMSE:", rmseSVMBest, "\n", 
+     "R-squared:", r2SVMBest)
+```
+
+```{r}
+#Overlay Predictions on Scatter Plot
+
+x = 1:length(TestSet$HomeValue)
+plot(x, TestSet$HomeValue, pch=18, col="red")
+lines(x, PreditedHomeValueSVMBest, lwd="1", col="blue")
+
+```
+
+
+
+Our best performance so far has been The performance from Model 4: ModelSVM  which gave us RMSE: 0.4259245  and R-squared: 0.70201661.
+
+We further tuned our Hyperparameters for SVM and evaluated the performance for every combination of maximum allowable error of 0, 1 and 0.1 and cost parameter 1 to 20. This gave us the best model at epsilon of 0 and cost of 8 which gave us RMSE: 0.3232587  and R-squared: 0.8674123. The best model reduced our RMSE from 0.42 to 0.32 and increased our R square from 0.70 to 0.867 giving us the best model performance so far. We can clearly see from the 3 overlay graphs that the best model gives us the best fit.
+
+### Model 6: Decision Tree
+```{r}
+# Model Decision Tree
+
+#visualization
+
+ModelDT <- rpart(HomeValue~., data=TrainSet)
+summary(ModelDT)
+
+#Visualizing the Decision tree
+rpart.plot(ModelDT)
+```
+
+```{r}
+#Predict using Decision Tree
+PreditedHomeValueDT = predict(ModelDT, TestSet)
+
+#Overlay Decision Tree Predictions on Scatter Plot
+
+x = 1:length(TestSet$HomeValue)
+plot(x, TestSet$HomeValue, pch=18, col="red")
+lines(x, PreditedHomeValueDT, lwd="1", col="blue")
+
+
+# Finally, we'll check the prediction accuracy with the MSE, MAE, RMSE, and R-squared metrics.
+
+mse = MSE(TestSet$HomeValue, PreditedHomeValueDT)
+mae = MAE(TestSet$HomeValue, PreditedHomeValueDT)
+rmse = RMSE(TestSet$HomeValue, PreditedHomeValueDT)
+r2 = R2(TestSet$HomeValue, PreditedHomeValueDT, form = "traditional")
+
+ 
+cat(" MAE:", mae, "\n", "MSE:", mse, "\n", 
+     "RMSE:", rmse, "\n", "R-squared:", r2)
+```
+
+We further try to improve our performance using Decision Tree. However, it could not beat our best performance of SVM best Model.The best model has a low RMSE of 0.32 compared to 0.50 in the Decision Tree model and higher R square of 0.867 compared to 0.62 in the Decision Tree. SVM Best Model is still our best performer.
+
+
+
+```{r}
+#check for important variables
+ModelDT$variable.importance
+```
+
+### Model 7: Decision Tree with best parameters using pruning
+
+The regression tree can be pruned for better results. Pruning translates to trimming. Pruning overcomes the problem of overfitting.
+We will be trimming the leaf nodes, and this way reduce the size of the tree.
+Pruning a tree requires us to choose the best Complexity Parameter (CP) value.
+We can either refer to the CP table or explicitly ask for the best CP value.
+Best CP value has the lowest Cross validation error (xerror) value.
+
+```{r}
+#Finding the best CP value
+printcp(ModelDT) #Choose the best CP value based on the lowest xerror from the CP table.
+```
+
+```{r}
+#From the CP table it is observed that 0.24181 is the lowest xerror value. 
+#However, the number of splits (nsplit) is 8. This has the same number of splits as our original tree.
+#We will get the same result as the nsplits will be the same for the original and pruned tree.
+#Hence, we should look another low xerror value. 
+
+#Prune the tree with best cp value (complexity parameter)
+prunedtree <- prune(ModelDT, cp = 0.011182) 
+
+#Visualizing the pruned tree
+rpart.plot(prunedtree)
+
+#Checking the order of variable importance
+prunedtree$variable.importance
+
+#performance of regression tree
+predprune <- predict(prunedtree, TestSet)
+```
+
+```{r}
+# Finally, we'll check the prediction accuracy with the MSE, MAE, RMSE, and R-squared metrics.
+
+mse = MSE(TestSet$HomeValue, predprune )
+mae = MAE(TestSet$HomeValue, predprune )
+rmse = RMSE(TestSet$HomeValue, predprune )
+r2 = R2(TestSet$HomeValue, predprune , form = "traditional")
+
+ 
+cat(" MAE:", mae, "\n", "MSE:", mse, "\n", 
+     "RMSE:", rmse, "\n", "R-squared:", r2)
+```
+
+Pruning the tree didnt reduce our RMSE or increase R2, so our first tree is good. Sometimes pruning is effective. In our case, it wasn't.
+
+### Model 8: Random Forest
+
+```{r}
+#Random Forest
+set.seed(123)
+ModelRF <- randomForest(HomeValue~., data=TrainSet, proximity=TRUE) 
+print(ModelRF)
+summary(ModelRF)
+```
+
+```{r}
+#Predict using Random Forest
+PreditedHomeValueRF = predict(ModelRF, TestSet)
+
+#Overlay Random Forest Predictions on Scatter Plot
+
+x = 1:length(TestSet$HomeValue)
+plot(x, TestSet$HomeValue, pch=18, col="red")
+lines(x, PreditedHomeValueRF, lwd="1", col="blue")
+
+
+# Finally, we'll check the prediction accuracy with the MSE, MAE, RMSE, and R-squared metrics.
+
+mse = MSE(TestSet$HomeValue, PreditedHomeValueRF)
+mae = MAE(TestSet$HomeValue, PreditedHomeValueRF)
+rmse = RMSE(TestSet$HomeValue, PreditedHomeValueRF)
+r2 = R2(TestSet$HomeValue, PreditedHomeValueRF, form = "traditional")
+
+ 
+cat(" MAE:", mae, "\n", "MSE:", mse, "\n", 
+     "RMSE:", rmse, "\n", "R-squared:", r2)
+```
+
+Random Forest didn't improve our performance either.It could not beat our best performance of SVM best Model.The best model has a low RMSE of 0.32 compared to 0.359 in the Random Forest model and higher R square of 0.867 compared to .81 in the Random Forest. SVM Best Model is still our best performer. Although, this Model also gave us a really good performance.
+
+Conclusion:
+
+To Conclude we used 8 different models to give us the best prediction on the Median HomeValue of various localities in Boston. 
+3 in Linear Regression
+2 in SVM
+2 in Decision Tree
+1 in Random Forest 
+We found the best Model to be SVM using a value of epsilon and cost at 0 and 8 respectively. It gave us an RMSE of 0.32 and R2 of 0.87.
+
+
+
+
